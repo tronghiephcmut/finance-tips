@@ -2,7 +2,7 @@ name: Cập nhật bản tin
 
 on:
   schedule:
-    - cron: "30 0 * * 1-5"   # 00:30 UTC = 07:30 giờ Việt Nam, thứ 2–6
+    - cron: "0 0 * * 1-7"   # 00:00 UTC = 07:00 giờ Việt Nam, thứ 2–6
   workflow_dispatch:          # cho phép bấm "Run workflow" bằng tay
 
 permissions:
