@@ -13,7 +13,7 @@ viết một hàm nhận (cfg) trả về dict, rồi đăng ký vào PROVIDERS.
 Mọi provider đều được bọc try/except: nguồn nào lỗi thì khối đó để trống,
 trang vẫn được tạo và ghi rõ nguồn lỗi ở phần "sources".
 """
-import argparse, json, os, re, sys, datetime as dt
+import argparse, json, math, os, re, sys, datetime as dt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 def load(name):
@@ -28,6 +28,17 @@ def safe(name, fn, *a, **k):
         ERRORS.append(f"{name}: {type(e).__name__}: {e}")
         return None
 
+def sanitize_json(obj):
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    elif isinstance(obj, dict):
+        return {k: sanitize_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_json(x) for x in obj]
+    return obj
+
 # ----------------------------------------------------------------- Yahoo Finance
 def yahoo_quotes(cfg):
     """Trả về {label: {value, pct, change}} cho danh sách ticker."""
@@ -35,12 +46,17 @@ def yahoo_quotes(cfg):
     out = {}
     for label, sym in cfg["symbols"].items():
         h = yf.Ticker(sym).history(period="5d", interval="1d")
-        if len(h) < 2:
+        closes = h["Close"].dropna() if "Close" in h and not h.empty else []
+        if len(closes) < 2:
             continue
-        last, prev = float(h["Close"].iloc[-1]), float(h["Close"].iloc[-2])
+        last, prev = float(closes.iloc[-1]), float(closes.iloc[-2])
+        if math.isnan(last) or math.isnan(prev):
+            continue
+        chg = last - prev
+        pct = (last / prev - 1) * 100 if prev != 0 else 0
         out[label] = {"label": label, "value": round(last, 2),
-                      "change": round(last - prev, 2),
-                      "pct": round((last / prev - 1) * 100, 2)}
+                      "change": round(chg, 2),
+                      "pct": round(pct, 2)}
     return out
 
 # ----------------------------------------------------------------- Chỉ số VN: nhiều nguồn, thử lần lượt
@@ -473,7 +489,8 @@ def write_html(data, out):
     tpl_path = os.path.join(HERE, "index.html")
     with open(tpl_path, encoding="utf-8") as f:
         html = f.read()
-    js = json.dumps(data, ensure_ascii=False, indent=1).replace("</", "<\\/")
+    clean_data = sanitize_json(data)
+    js = json.dumps(clean_data, ensure_ascii=False, indent=1, allow_nan=False).replace("</", "<\\/")
     html = re.sub(r"(<!-- DATA_START -->\s*<script id=\"market-data\" type=\"application/json\">)(.*?)(</script>)",
                   lambda mm: mm.group(1) + "\n" + js + "\n" + mm.group(3), html, flags=re.S)
     with open(out, "w", encoding="utf-8") as f:
@@ -491,7 +508,7 @@ if __name__ == "__main__":
     write_html(data, a.out)
     if a.dump:
         with open(a.dump, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=1)
+            json.dump(sanitize_json(data), f, ensure_ascii=False, indent=1, allow_nan=False)
     print("Đã ghi", a.out)
     for e in ERRORS:
         print("  cảnh báo:", e, file=sys.stderr)
