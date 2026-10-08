@@ -378,7 +378,7 @@ def pct_note(label, q):
 def build(cfg):
     today = dt.date.today()
     data = {"meta": {"date": today.strftime("%d.%m.%Y"),
-                     "generated_at": dt.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                     "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                      "author": "Bản tin tự động",
                      "note": "Dữ liệu sau đóng cửa phiên Việt Nam gần nhất và phiên Mỹ gần nhất",
                      "sources": [], "alert_pct": cfg.get("alert_pct", 4)},
@@ -480,6 +480,8 @@ def write_html(data, out):
         f.write(html)
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
     ap = argparse.ArgumentParser()
     ap.add_argument("--sample", action="store_true", help="dùng sample_data.json")
     ap.add_argument("--out", default=os.path.join(HERE, "index.html"))
